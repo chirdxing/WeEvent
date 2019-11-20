@@ -4,7 +4,7 @@
     <el-button type='primary' size='small' icon='el-icon-plus' @click='addNewOne'>{{$t('common.add')}}</el-button>
     <div class='search_part'>
       <el-input v-model.trim='topicName'
-        :placeholder="$t('tableCont.searchTpoic')"
+        :placeholder="$t('tableCont.searchTopic')"
         size='small'
         clearable
       ></el-input>
@@ -35,7 +35,10 @@
            <el-form-item :label="$t('tableCont.newBlockNumber')  + ' :'">
             <span>{{ props.row.detail.blockNumber }}</span>
           </el-form-item><br/>
-          <el-form-item :label="$t('tableCont.address')  + ' :'">
+          <el-form-item :label="$t('tableCont.lastTimestamp')  + ' :'">
+            <span>{{ props.row.detail.lastTimestamp }}</span>
+          </el-form-item><br/>
+          <el-form-item :label="$t('tableCont.address')  + ' :'" v-show="props.row.detail.topicAddress">
             <span>{{ props.row.detail.topicAddress }}</span>
           </el-form-item>
         </el-form>
@@ -65,10 +68,10 @@
     layout="sizes,total, prev, pager, next, jumper"
     :total="total">
   </el-pagination>
-  <el-dialog :title="$t('tableCont.addTopic')" :visible.sync="dialogFormVisible" center width='450px' >
+  <el-dialog :title="$t('tableCont.addTopic')" :visible.sync="dialogFormVisible" center width='450px' :close-on-click-modal='false'>
     <el-form :model="form" :rules="rules" ref='form'>
       <el-form-item :label="$t('common.name') + ' :'" prop='name'>
-        <el-input v-model.trim="form.name" autocomplete="off"></el-input>
+        <el-input v-model="form.name" autocomplete="off"></el-input>
       </el-form-item>
       <el-form-item :label="$t('common.detail') + ' :'">
         <el-input v-model="form.describe" type='textarea' autocomplete="off"></el-input>
@@ -107,7 +110,7 @@ export default {
       },
       rules: {
         name: [
-          { validator: name, trigger: 'blur' }
+          { required: true, validator: name, trigger: 'blur' }
         ]
       },
       creater: ''
@@ -121,7 +124,8 @@ export default {
       let data = {
         pageIndex: vm.pageIndex - 1,
         pageSize: vm.pageSize,
-        brokerId: Number(localStorage.getItem('brokerId'))
+        brokerId: Number(localStorage.getItem('brokerId')),
+        groupId: Number(localStorage.getItem('groupId'))
       }
       API.topicList(data).then(res => {
         if (res.status === 200) {
@@ -130,7 +134,8 @@ export default {
           let det = {
             'topicName': '',
             'createdTimestamp': '',
-            'topicAddress': ''
+            'topicAddress': '',
+            'lastTimestamp': ''
           }
           listData.forEach(item => {
             vm.$set(item, 'detail', det)
@@ -151,10 +156,11 @@ export default {
     },
     readDetail (e) {
       var vm = this
-      let url = '?brokerId=' + localStorage.getItem('brokerId') + '&topic=' + e.topicName
+      let url = '?brokerId=' + localStorage.getItem('brokerId') + '&groupId=' + localStorage.getItem('groupId') + '&topic=' + e.topicName
       API.topicState(url).then(res => {
         let time = getDateDetail(res.data.createdTimestamp)
         res.data.createdTimestamp = time
+        res.data.lastTimestamp = getDateDetail(res.data.lastTimestamp)
         vm.$set(e, 'detail', res.data)
       })
     },
@@ -196,31 +202,25 @@ export default {
             topic: vm.form.name,
             creater: localStorage.getItem('user'),
             brokerId: Number(localStorage.getItem('brokerId')),
+            groupId: Number(localStorage.getItem('groupId')),
             description: vm.form.describe
           }
           API.openTopic(data).then(res => {
-            if (res.status === 200) {
-              if (res.data.code && (res.data.code === 100106)) {
-                vm.$message({
-                  type: 'error',
-                  message: this.$t('tableCont.errorTopicName')
-                })
-              } else if (res.data.code === 100) {
-                vm.$message({
-                  type: 'error',
-                  message: this.$t('common.addFail')
-                })
-              } else {
-                vm.$message({
-                  type: 'success',
-                  message: this.$t('common.addSuccess')
-                })
-                vm.refresh()
-              }
+            if (res.data.status === 200) {
+              vm.$message({
+                type: 'success',
+                message: this.$t('common.addSuccess')
+              })
+              vm.refresh()
+            } else if (res.data.status === 100109) {
+              vm.$message({
+                type: 'error',
+                message: this.$t('tableCont.exitTopic')
+              })
             } else {
               vm.$message({
                 type: 'error',
-                message: this.$t('common.addFail')
+                message: res.data.message
               })
             }
             vm.dialogFormVisible = false
@@ -265,21 +265,19 @@ export default {
     if (sessionStorage.getItem('topic')) {
       var vm = this
       vm.tableData = []
-      if (sessionStorage.getItem('topic') !== '—') {
-        let url = '?brokerId=' + localStorage.getItem('brokerId') + '&groupId=' + localStorage.getItem('groupId') + '&topic=' + sessionStorage.getItem('topic')
-        API.topicInfo(url).then(res => {
-          let time = getDateDetail(res.data.createdTimestamp)
-          res.data.createdTimestamp = time
-          let item = {
-            topicName: res.data.topicName,
-            creater: '——',
-            createdTimestamp: time,
-            detail: {}
-          }
-          vm.tableData.push(item)
-          vm.total = 1
-        })
-      }
+      let url = '?brokerId=' + localStorage.getItem('brokerId') + '&groupId=' + localStorage.getItem('groupId') + '&topic=' + sessionStorage.getItem('topic')
+      API.topicInfo(url).then(res => {
+        let time = getDateDetail(res.data.createdTimestamp)
+        res.data.createdTimestamp = time
+        let item = {
+          topicName: res.data.topicName,
+          creater: '——',
+          createdTimestamp: time,
+          detail: {}
+        }
+        vm.tableData.push(item)
+        vm.total = 1
+      })
     } else {
       this.getLsitData()
     }
@@ -303,11 +301,17 @@ export default {
     brokerId () {
       this.pageIndex = 1
       this.pageSize = 10
+      this.tableData = []
+      this.total = 0
+      this.topicName = ''
       this.refresh()
     },
     groupId () {
       this.pageIndex = 1
       this.pageSize = 10
+      this.tableData = []
+      this.total = 0
+      this.topicName = ''
       this.refresh()
     }
   },

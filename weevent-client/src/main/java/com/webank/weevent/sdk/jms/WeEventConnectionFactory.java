@@ -32,7 +32,7 @@ import lombok.extern.slf4j.Slf4j;
 public class WeEventConnectionFactory implements ConnectionFactory, QueueConnectionFactory, TopicConnectionFactory {
     public final static String NotSupportTips = "not support, only support pub/sub model in bytes message, no ack and transaction";
 
-    public final static String defaultBrokerUrl = "ws://localhost:8080/weevent/stomp";
+    public final static String defaultBrokerUrl = "ws://localhost:7000/weevent/stomp";
 
     // JMS provider
     private URI brokerUri;
@@ -93,7 +93,7 @@ public class WeEventConnectionFactory implements ConnectionFactory, QueueConnect
 
     private void setBrokerUri(URI uri) {
         this.brokerUri = uri;
-        this.timeout = 5;
+        this.timeout = 10;
     }
 
     private URI createUri(String url) throws JMSException {

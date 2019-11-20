@@ -8,7 +8,7 @@ const con = require('../../config/config.js')
 class BaseModule {
   constructor () {
     this.$http = axios.create({
-      timeout: 15 * 1000,
+      timeout: 5 * 1000,
       withCredentials: true
     })
 
@@ -18,7 +18,7 @@ class BaseModule {
         'X-Requested-With': 'XMLHttpRequest'
       }
     }
-    // 请求前的数据拦截
+
     this.$http.interceptors.request.use(config => {
       config.url = con.ROOT + config.url
       if (config.method === 'delete' || config.method === 'get') {
@@ -26,7 +26,7 @@ class BaseModule {
       }
       return config
     })
-    // 收到数据的拦截
+
     this.$http.interceptors.response.use(config => {
       return new Promise((resolve, reject) => {
         let data = config.data

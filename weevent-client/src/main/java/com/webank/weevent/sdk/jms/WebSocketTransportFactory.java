@@ -11,6 +11,7 @@ import com.webank.weevent.sdk.BrokerException;
 import com.webank.weevent.sdk.ErrorCode;
 import com.webank.weevent.sdk.WeEventClient;
 
+import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -20,12 +21,9 @@ import lombok.extern.slf4j.Slf4j;
  * @since 2019/04/02
  */
 @Slf4j
+@Data
 public class WebSocketTransportFactory {
     private static int heartbeat = 30;
-
-    public static void setHeartbeat(int hb) {
-        heartbeat = hb;
-    }
 
     public static WebSocketTransport create(URI uri, int timeout) throws JMSException {
         try {
@@ -40,18 +38,21 @@ public class WebSocketTransportFactory {
             client.setTcpNoDelay(true);
             client.setConnectionLostTimeout(heartbeat);
             client.setTimeout(timeout);
+
+            // block connect
             boolean result = client.connectBlocking(timeout, TimeUnit.SECONDS);
             if (!result) {
                 log.error("connect to remote failed, {}", uri.toString());
                 throw WeEventConnectionFactory.error2JMSException(ErrorCode.URL_CONNECT_FAILED);
             }
 
+            log.info("connect to remote success, {}", uri.toString());
             return client;
         } catch (BrokerException e) {
             log.error("connect to remote failed, {}", uri.toString());
             throw WeEventConnectionFactory.exp2JMSException(e);
         } catch (InterruptedException e) {
-            log.error("interrupted while connecting");
+            log.error("interrupted while connecting, {}", uri.toString());
             Thread.currentThread().interrupt();
             throw WeEventConnectionFactory.error2JMSException(ErrorCode.URL_CONNECT_FAILED);
         }

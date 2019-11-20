@@ -32,6 +32,7 @@ function nginx_setup() {
 
     sed -i "s/443/$nginx_port/g" ${nginx_path}/conf/conf.d/https.conf
     sed -i "s/8080/$nginx_port/g" ${nginx_path}/conf/conf.d/http_quickinstall.conf
+    sed -i "s/nobody/${USER}/g" ${nginx_path}/conf/nginx.conf
 
     if [[ "$ssl" = "true" ]]; then
         sed -i "s/http.conf/https.conf/g" ${nginx_path}/conf/nginx.conf
@@ -48,6 +49,12 @@ function nginx_setup() {
         echo "set governance_url: $governance_url"
         sed -i "s/localhost:7009/$governance_url/g" ${nginx_path}/conf/conf.d/http_rs_quickinstall.conf
     fi
+
+    if  [[ -n ${processor_port} ]]; then
+        processor_url="localhost:${processor_port}"
+        echo "set processor_url: localhost:${processor_port}"
+        sed -i "s/localhost:7008/$processor_url/g" ${nginx_path}/conf/conf.d/http_rs_quickinstall.conf
+    fi
     
     cp nginx.sh ${nginx_path}
 
@@ -58,7 +65,7 @@ function nginx_setup() {
 if [[ $# -lt 2 ]]; then
     echo "Usage:"
     echo "    $0 --nginx_path /data/app/weevent/nginx "
-    echo "    --broker_port --governance_port"
+    echo "    --broker_port 7000 --governance_port 7009 --processor_port 7008"
     exit 1
 fi
 
@@ -68,6 +75,7 @@ nginx_port=
 ssl=
 broker_port=
 governance_port=
+processor_port=
 current_path=$(pwd)
 top_path=$(dirname $(dirname $(pwd)))
 
@@ -81,6 +89,7 @@ while [[ $# -ge 2 ]]; do
         --broker_port) param="$1 = $2;"; broker_port="$2"; shift 2;;
         --governance_ip) param="$1 = $2;"; governance_ip="$2"; shift 2;;
         --governance_port) param="$1 = $2;"; governance_port="$2"; shift 2;;
+        --processor_port) param="$1 = $2;"; processor_port="$2"; shift 2;;
         *) echo "unknown parameter $1."; exit 1; break;;
         esac
 done

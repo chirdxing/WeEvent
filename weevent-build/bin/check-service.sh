@@ -11,8 +11,9 @@ function yellow_echo () {
 function check_broker(){
     echo "check broker service"
 
-    existTopic=$(curl -s "http://127.0.0.1:8080/weevent/rest/exist?topic=hello")
-    if [[ "${existTopic}" == "true" || "${existTopic}" == "false" ]];then
+
+    list_group_response=$(curl -s "http://127.0.0.1:8080/weevent/admin/listGroup")
+    if [[ ${list_group_response} == {*success*} ]];then
         yellow_echo "broker service is ok"
     else
         yellow_echo "broker service is error"
@@ -31,7 +32,7 @@ function check_governance(){
  }
 function check_processor(){
     echo "check processor service"
-    curl -s "http://127.0.0.1:8080/weevent/processor/getCEPRuleListByPage?currPage=1&pageSize=10" | grep 302000 >>/dev/null
+    curl -s  -d 'payload={\"a\":\"1\"}&condition=a<10' http://127.0.0.1:8080/processor/checkWhereCondition | grep "errorCode" >>/dev/null
     if [[ $? -eq 0 ]];then
         yellow_echo "processor service is ok"
     else

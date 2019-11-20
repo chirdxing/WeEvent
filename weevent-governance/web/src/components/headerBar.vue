@@ -18,40 +18,6 @@
     </el-dropdown>
   </div>
   <div class='right_part'>
-    <el-popover
-      placement="bottom"
-      :title="$t('header.weEventVersion')"
-      width="250"
-      trigger="click"
-      v-show='!noServer'
-      >
-      <div id='version'>
-        <p class='version_infor'>
-          <span class='version_title'>
-            Branch :
-          </span>
-          <span class='version_content'>
-            {{version.gitBranch}}
-          </span>
-        </p>
-        <p class='version_infor'>
-          <span class='version_title'>
-            CommitHash :
-          </span>
-          <span class='version_content'>
-            {{version.gitCommitHash}}
-          </span>
-        </p>
-        <p class='version_infor'>
-          <span class='version_title'>
-            {{$t('header.lastCommit')}}
-          </span>
-          <span class='version_content'>{{version.gitCommitTimeStamp}}</span>
-        </p>
-      </div>
-      <el-button slot="reference">{{$t('header.version') + ':'}} {{version.weEventVersion}}</el-button>
-    </el-popover>
-    <span style='margin:0 5px 0 15px'></span>
     <el-dropdown trigger="click" @command='selectLang'>
       <span>{{$t('header.lang')}}<i class="el-icon-arrow-down el-icon-caret-bottom"></i></span>
       <el-dropdown-menu slot="dropdown">
@@ -131,18 +97,9 @@ export default {
     },
     selecServers (e) {
       this.server = this.servers[e].name
-      let isConfigRule = this.servers[e].isConfigRule
       this.$store.commit('set_id', this.servers[e].id)
       this.$store.commit('setConfigRule', this.servers[e].isConfigRule)
       localStorage.setItem('brokerId', this.servers[e].id)
-      if (isConfigRule !== '1') {
-        let url = this.$route.path
-        if (url === '/rule' || url === '/ruleDetail' || url === '/dataBase' || url === '/transactionInfor') {
-          this.$store.commit('set_active', '1-1')
-          this.$store.commit('set_menu', [this.$t('sideBar.blockChainInfor'), this.$t('sideBar.overview')])
-          this.$router.push('./index')
-        }
-      }
     },
     selectGroup (e) {
       this.$store.commit('set_groupId', e)
@@ -174,7 +131,6 @@ export default {
               localStorage.setItem('brokerId', id)
             }
             vm.listGroup()
-            vm.getVersion()
           } else {
             vm.$message({
               type: 'warning',
@@ -190,23 +146,13 @@ export default {
       API.listGroup('?brokerId=' + localStorage.getItem('brokerId')).then(res => {
         // if groupId is not existed so set it
         // else use existed groupId
-        vm.groupList = [].concat(res.data)
-        if (!localStorage.getItem('groupId')) {
-          vm.$nextTick(fun => {
-            vm.$store.commit('set_groupId', res.data[0])
-            localStorage.setItem('groupId', res.data[0])
-          })
-        } else {
-          vm.$store.commit('set_groupId', localStorage.getItem('groupId'))
-        }
-      })
-    },
-    getVersion () {
-      let url = '?brokerId=' + localStorage.getItem('brokerId')
-      let vm = this
-      API.getVersion(url).then(res => {
+        vm.groupList = []
         if (res.data.code === 0) {
-          vm.version = Object.assign({}, res.data.data)
+          vm.groupList = [].concat(res.data.data)
+          vm.$nextTick(fun => {
+            vm.$store.commit('set_groupId', res.data.data[0])
+            localStorage.setItem('groupId', res.data.data[0])
+          })
         }
       })
     },

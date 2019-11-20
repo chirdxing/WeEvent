@@ -2,28 +2,32 @@
   <div class='statistics'>
     <div class='dataContent'>
       <div class='selectOptions'>
-        <span class='optionTitle'>{{$t('tableCont.chooseTopic')}}</span>
-        <el-select v-model="topic" multiple :placeholder="$t('common.choose')" @visible-change="selectChange" collapse-tags size="small">
-          <el-option
-            v-for="(item, index) in topicList"
-            :key="index"
-            :label="item"
-            :value="item"
-            >
-          </el-option>
-        </el-select>
-        <span class='optionTitle' style='margin-left:20px'>{{$t('tableCont.chooseTime')}}</span>
-        <el-date-picker
-          size="small"
-          type="daterange"
-          value-format="timestamp"
-          v-model='selectTime'
-          @change="getTime"
-          :picker-options="pickerOptions"
-          range-separator="-"
-          :start-placeholder="$t('tableCont.beginTime')"
-          :end-placeholder="$t('tableCont.endTime')">
-        </el-date-picker>
+        <div>
+          <span class='optionTitle'>{{$t('tableCont.chooseTopic')}}</span>
+          <el-select v-model="topic" multiple @visible-change="selectChange" collapse-tags size="small">
+            <el-option
+              v-for="(item, index) in topicList"
+              :key="index"
+              :label="item"
+              :value="item"
+              >
+            </el-option>
+          </el-select>
+        </div>
+        <div>
+          <span class='optionTitle'>{{$t('tableCont.chooseTime')}}</span>
+          <el-date-picker
+            size="small"
+            type="daterange"
+            value-format="timestamp"
+            v-model='selectTime'
+            @change="getTime"
+            :picker-options="pickerOptions"
+            range-separator="-"
+            :start-placeholder="$t('tableCont.beginTime')"
+            :end-placeholder="$t('tableCont.endTime')">
+          </el-date-picker>
+        </div>
       </div>
       <div class='statisticsCharts'>
         <div class='chart' id='chart'></div>
@@ -35,7 +39,8 @@
 import Highcharts from 'highcharts/highstock'
 import { getLastWeek, getTimeList } from '../utils/formatTime'
 import API from '../API/resource.js'
-export default{
+require('highcharts/modules/no-data-to-display.js')(Highcharts)
+export default {
   data () {
     return {
       pickerOptions: {
@@ -53,7 +58,10 @@ export default{
         yAxis: {
           title: '',
           max: '10',
-          lineWidth: 2
+          lineWidth: 2,
+          labels: {
+            step: 2
+          }
         },
         xAxis: {
           categories: []
@@ -63,6 +71,16 @@ export default{
           crosshairs: true
         },
         series: [],
+        lang: {
+          noData: this.$t('common.noData')
+        },
+        noData: {
+          style: {
+            fontWeight: 'bold',
+            fontSize: '15px',
+            color: '#303030'
+          }
+        },
         legend: {
           align: 'center',
           verticalAlign: 'top',
@@ -75,6 +93,28 @@ export default{
     }
   },
   methods: {
+    getTopic () {
+      let vm = this
+      let data = {
+        'beginDate': vm.selectTime[0],
+        'endDate': vm.selectTime[1],
+        'topicList': [],
+        'groupId': localStorage.getItem('groupId'),
+        'brokerId': localStorage.getItem('brokerId'),
+        'userId': localStorage.getItem('userId')
+      }
+      API.historicalData(data).then(res => {
+        if (res.data.status === 200) {
+          let resData = res.data.data
+          vm.topicList = []
+          for (var key in resData) {
+            vm.topicList.push(key)
+          }
+        } else {
+          vm.topicList = []
+        }
+      })
+    },
     beginDate (e) {
       let vm = this
       let data = {
@@ -85,24 +125,30 @@ export default{
         'brokerId': localStorage.getItem('brokerId'),
         'userId': localStorage.getItem('userId')
       }
+      vm.getTopic()
       API.historicalData(data).then(res => {
         if (res.data.status === 200) {
           let resData = res.data.data
+          if (!resData || resData.length === 0) {
+            Highcharts.chart('chart', vm.option).showNoData()
+            return
+          }
           let topic = []
           vm.option.series = []
-          if (e) {
-            vm.topicList = []
-          }
           for (var key in resData) {
-            if (e) {
-              vm.topicList.push(key)
-            }
-            topic.push(key)
             let item = {
               'name': key,
               'data': resData[key]
             }
-            vm.option.series.push(item)
+            if (e) {
+              if (vm.option.series.length < 5) {
+                topic.push(key)
+                vm.option.series.push(item)
+              }
+            } else {
+              topic.push(key)
+              vm.option.series.push(item)
+            }
           }
           let max = 10
           vm.option.series.forEach(x => {
@@ -110,15 +156,18 @@ export default{
               max = y > max ? y : max
             })
           })
+          max = Math.ceil(max / 10) * 10 - 5
           vm.option.yAxis.max = max
           vm.topic = [].concat(topic)
-          console.log(vm.option)
-          Highcharts.chart('chart', vm.option)
+          setTimeout(fun => {
+            Highcharts.chart('chart', vm.option)
+          }, 500)
         } else {
           vm.$message({
             type: 'warning',
             message: this.$t('tableCont.getDataError')
           })
+          Highcharts.chart('chart', vm.option).showNoData()
         }
       })
     },
@@ -153,6 +202,9 @@ export default{
     },
     groupId () {
       return this.$store.state.groupId
+    },
+    lang () {
+      return this.$store.state.lang
     }
   },
   watch: {
@@ -161,6 +213,14 @@ export default{
     },
     groupId () {
       this.beginDate(true)
+    },
+    lang () {
+      this.option.lang.noData = this.$t('common.noData')
+      if (this.option.series.length === 0) {
+        Highcharts.chart('chart', this.option).showNoData()
+      } else {
+        Highcharts.chart('chart', this.option)
+      }
     }
   },
   mounted () {

@@ -12,22 +12,39 @@
     style="width: 100%"
     >
     <el-table-column
-      :label="$t('rule.databaseUrl')"
+      :label="$t('rule.JDBCname')"
+      prop="databaseName"
+      width='200'>
+    </el-table-column>
+    <el-table-column
+      :label="$t('rule.tableName')"
+      prop="tableName"
+      width='200'>
+    </el-table-column>
+    <el-table-column
+      :label="$t('rule.ruleDataBaseId')"
       prop="databaseUrl">
     </el-table-column>
     <el-table-column
       :label="$t('common.action')"
       width='170'>
       <template  slot-scope="scope">
-        <a @click='update(scope.row)' style="cursor: pointer;margin-right:10px">{{$t('common.edit')}}</a>
-        <a @click='deleteItem(scope.row)' style="cursor: pointer">{{$t('common.delete')}}</a>
+        <a @click='update(scope.row)' style="cursor: pointer;margin-right:10px;color:#006cff">{{$t('common.edit')}}</a>
+        <a @click='deleteItem(scope.row)' style="cursor: pointer;color:#006cff">{{$t('common.delete')}}</a>
       </template>
     </el-table-column>
   </el-table>
-  <el-dialog :title="title" :visible.sync="showlog" center width='450px' >
+  <el-dialog :title="title" :visible.sync="showlog" center width='450px' :close-on-click-modal='false'>
     <el-form :model="form" :rules="rules" ref='form'>
-      <el-form-item :label="$t('rule.databaseUrl')" prop='url'>
-        <el-input v-model.trim="form.url" type='textarea' :rows='4' autocomplete="off" :placeholder="$t('common.examples') + 'jdbc:mysql://127.0.0.1:3306/governance?root=root&password=123456&useUnicode=true&characterEncoding=utf-8&useSSL=false&tableName=tableName'"></el-input>
+      <el-form-item :label="$t('rule.JDBCname')" prop='databaseName'>
+        <el-input v-model.trim="form.databaseName" autocomplete="off"></el-input>
+      </el-form-item>
+
+      <el-form-item :label="$t('rule.ruleDataBaseId')" prop='url'>
+        <el-input v-model.trim="form.url" type='textarea' :rows='4' autocomplete="off" :placeholder="$t('common.examples') + 'jdbc:mysql://127.0.0.1:3306/governance?user=root&password=123456&useUnicode=true&characterEncoding=utf-8&useSSL=false'"></el-input>
+      </el-form-item>
+      <el-form-item :label="$t('rule.tableName')" prop='tableName'>
+        <el-input v-model.trim="form.tableName" autocomplete="off"></el-input>
       </el-form-item>
     </el-form>
     <div slot="footer" class="dialog-footer">
@@ -41,6 +58,27 @@
 import API from '../API/resource.js'
 export default {
   data () {
+    var url = (rule, value, callback) => {
+      if (value === '') {
+        callback(new Error(this.$t('rule.enterDB')))
+      } else {
+        callback()
+      }
+    }
+    var databaseName = (rule, value, callback) => {
+      if (value === '') {
+        callback(new Error(this.$t('rule.enterJDBCname')))
+      } else {
+        callback()
+      }
+    }
+    var tableName = (rule, value, callback) => {
+      if (value === '') {
+        callback(new Error(this.$t('rule.enterTableName')))
+      } else {
+        callback()
+      }
+    }
     return {
       topicName: '',
       loading: false,
@@ -50,11 +88,19 @@ export default {
       type: 1,
       title: this.$t('rule.addAddress'),
       form: {
-        url: ''
+        databaseName: '',
+        url: '',
+        tableName: ''
       },
       rules: {
+        databaseName: [
+          { required: true, validator: databaseName, trigger: 'blur' }
+        ],
         url: [
-          { required: true, message: this.$t('rule.enterDB'), trigger: 'blur' }
+          { required: true, validator: url, trigger: 'blur' }
+        ],
+        tableName: [
+          { required: true, validator: tableName, trigger: 'blur' }
         ]
       }
     }
@@ -62,7 +108,12 @@ export default {
   watch: {
     showlog (nVal) {
       if (!nVal) {
-        this.form.url = ''
+        let data = {
+          databaseName: '',
+          tableName: '',
+          url: ''
+        }
+        this.form = Object.assign({}, data)
         this.type = 1
         this.title = this.$t('rule.addAddress')
         this.$refs.form.resetFields()
@@ -82,6 +133,8 @@ export default {
       vm.$refs.form.validate((valid) => {
         let data = {
           'databaseUrl': vm.form.url,
+          'databaseName': vm.form.databaseName,
+          'tableName': vm.form.tableName,
           'userId': localStorage.getItem('userId')
         }
         if (valid) {
@@ -97,7 +150,7 @@ export default {
               } else {
                 vm.$message({
                   type: 'warning',
-                  message: this.$t('common.operFail')
+                  message: res.data.message
                 })
               }
               vm.showlog = false
@@ -114,7 +167,7 @@ export default {
               } else {
                 vm.$message({
                   type: 'warning',
-                  message: this.$t('common.operFail')
+                  message: res.data.message
                 })
               }
               vm.showlog = false
@@ -126,6 +179,8 @@ export default {
     update (e) {
       this.showlog = true
       this.id = e.id
+      this.form.databaseName = e.databaseName
+      this.form.tableName = e.tableName
       this.form.url = e.databaseUrl
       this.title = this.$t('rule.enditAddress')
       this.type = 2
@@ -151,7 +206,7 @@ export default {
           } else {
             vm.$message({
               type: 'warning',
-              message: vm.$t('common.operFail')
+              message: res.data.message
             })
           }
           vm.showlog = false
