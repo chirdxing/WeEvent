@@ -140,5 +140,13 @@
   "eventList": {
     "method": "post",
     "url": "weevent-governance/historicalData/eventList"
+  },
+  "checkJDBC": {
+    "method": "post",
+    "url": "weevent-governance/circulationDatabase/checkDataBaseUrl"
+  },
+  "ruleStatic": {
+    "method": "get",
+    "url": "weevent-governance/processor/statistic"
   }
 }

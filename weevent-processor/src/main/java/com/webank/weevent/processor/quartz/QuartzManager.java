@@ -7,11 +7,12 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
-
 import javax.annotation.PostConstruct;
 
 import com.webank.weevent.processor.cache.CEPRuleCache;
 import com.webank.weevent.processor.model.CEPRule;
+import com.webank.weevent.processor.model.StatisticRule;
+import com.webank.weevent.processor.model.StatisticWeEvent;
 import com.webank.weevent.processor.utils.ConstantsHelper;
 import com.webank.weevent.processor.utils.RetCode;
 
@@ -74,6 +75,7 @@ public class QuartzManager {
 
     }
 
+
     /**
      * add job and modify
      *
@@ -112,8 +114,8 @@ public class QuartzManager {
             ruleMap.put(currentRule.getId(), currentRule);
             ruleList.add(currentRule);
             params.put("ruleMap", ruleMap);
-
             log.info("update the job  ruleMap:{},ruleList:{}", ruleMap.size(), ruleList.size());
+
             JobDetail job = JobBuilder.newJob(jobClass).withIdentity(jobName, jobGroupName).setJobData(params).requestRecovery(true).storeDurably(true).build();
 
             // just do one time
@@ -233,4 +235,56 @@ public class QuartzManager {
         }
     }
 
+    /**
+     * get the statistic jobs
+     */
+    public StatisticWeEvent getStatisticJobs(StatisticWeEvent statisticWeEvent, List<String> idList) {
+        Map<String, StatisticRule> statisticRuleMap = statisticWeEvent.getStatisticRuleMap();
+
+        try {
+            // get the all rules
+            Iterator<JobKey> it = scheduler.getJobKeys(GroupMatcher.anyGroup()).iterator();
+
+            int systemAmount = 0;
+            int userAmount = 0;
+            int runAmount = 0;
+
+            while (it.hasNext()) {
+                JobKey jobKey = (JobKey) it.next();
+                if (null != scheduler.getJobDetail(jobKey).getJobDataMap().get("rule")) {
+                    CEPRule rule = (CEPRule) scheduler.getJobDetail(jobKey).getJobDataMap().get("rule");
+
+                    // statistic
+                    if ("1".equals(rule.getSystemTag())) {
+                        systemAmount = systemAmount + 1;
+                    } else {
+                        userAmount = userAmount + 1;
+                    }
+                    if ("1".equals(rule.getStatus())) {
+                        runAmount = runAmount + 1;
+                    }
+
+                    // match the right rule
+                    if ((!statisticRuleMap.containsKey(rule.getId())) && idList.contains(rule.getId())) {
+                        StatisticRule statisticRule = new StatisticRule();
+                        statisticRule.setId(rule.getId());
+                        statisticRule.setBrokerId(rule.getBrokerId());
+                        statisticRule.setRuleName(rule.getRuleName());
+                        statisticRule.setStatus(rule.getStatus());
+                        statisticRule.setStartTime(rule.getCreatedTime());
+                        statisticRule.setDestinationType(rule.getConditionType());
+                        statisticRuleMap.put(rule.getId(), statisticRule);
+                    }
+                }
+            }
+            statisticWeEvent.setSystemAmount(systemAmount);
+            statisticWeEvent.setUserAmount(userAmount);
+            statisticWeEvent.setRunAmount(runAmount);
+            statisticWeEvent.setStatisticRuleMap(statisticRuleMap);
+            return statisticWeEvent;
+        } catch (Exception e) {
+            log.error("e:{}", e.toString());
+            return null;
+        }
+    }
 }

@@ -1,17 +1,21 @@
 package com.webank.weevent.processor.controller;
 
+import java.util.List;
+import java.io.IOException;
+
 import javax.validation.Valid;
 
 import com.webank.weevent.processor.ProcessorApplication;
+import com.webank.weevent.processor.model.StatisticWeEvent;
 import com.webank.weevent.processor.mq.CEPRuleMQ;
 import com.webank.weevent.processor.quartz.CRUDJobs;
 import com.webank.weevent.processor.quartz.QuartzManager;
+import com.webank.weevent.processor.service.StatisticRuleService;
 import com.webank.weevent.processor.utils.BaseRspEntity;
 import com.webank.weevent.processor.model.CEPRule;
 import com.webank.weevent.processor.utils.ConstantsHelper;
 import com.webank.weevent.processor.utils.RetCode;
 
-import com.alibaba.fastjson.JSONArray;
 import lombok.extern.slf4j.Slf4j;
 import org.quartz.JobDataMap;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -26,6 +30,8 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 public class CEPRuleController {
 
+    @Autowired
+    private StatisticRuleService statisticRuleService;
     @Autowired
     private QuartzManager quartzManager;
 
@@ -76,25 +82,38 @@ public class CEPRuleController {
 
     @RequestMapping(value = "/deleteCEPRuleById", method = RequestMethod.POST)
     @ResponseBody
-    public BaseRspEntity deleteCEPRuleById(@RequestParam(name = "id") String id) {
+    public BaseRspEntity deleteCEPRuleById(@RequestParam(name = "id") String id) throws IOException {
 
         BaseRspEntity resEntity = new BaseRspEntity(ConstantsHelper.RET_SUCCESS);
-        createJob(id,"deleteCEPRuleById");
+        createJob(id, "deleteCEPRuleById");
         RetCode ret = deleteJob(id);
 
         if (!(1 == ret.getErrorCode())) { //fail
             resEntity.setErrorCode(ret.getErrorCode());
             resEntity.setErrorMsg(ret.getErrorMsg());
         }
+        return resEntity;
+    }
 
-        log.info("cepRule:{}", JSONArray.toJSON(ret));
+    @RequestMapping(value = "/statistic", method = RequestMethod.GET)
+    @ResponseBody
+    public BaseRspEntity statistic(@RequestParam List<String> idList) {
+
+        BaseRspEntity resEntity = new BaseRspEntity(ConstantsHelper.RET_SUCCESS);
+        StatisticWeEvent getWeEventCollecttion = statisticRuleService.getStatisticWeEvent(idList);
+        if (null == getWeEventCollecttion) { //fail
+            resEntity.setErrorCode(ConstantsHelper.RET_FAIL.getErrorCode());
+            resEntity.setErrorMsg(ConstantsHelper.RET_FAIL.getErrorMsg());
+        } else { // set rule
+            resEntity.setData(getWeEventCollecttion);
+        }
         return resEntity;
     }
 
 
     @RequestMapping(value = "/startCEPRule", method = RequestMethod.POST)
     @ResponseBody
-    public BaseRspEntity startCEPRule(@Valid @RequestBody CEPRule rule) {
+    public BaseRspEntity startCEPRule(@Valid @RequestBody CEPRule rule) throws IOException {
         BaseRspEntity resEntity = new BaseRspEntity(ConstantsHelper.RET_SUCCESS);
         RetCode ret = createJob(rule, "startCEPRule");
 
@@ -102,13 +121,12 @@ public class CEPRuleController {
             resEntity.setErrorCode(ConstantsHelper.RET_FAIL.getErrorCode());
             resEntity.setErrorMsg(ConstantsHelper.RET_FAIL.getErrorMsg());
         }
-        log.info("cepRule:{}", JSONArray.toJSON(ret));
         return resEntity;
     }
 
     @RequestMapping(value = "/checkWhereCondition")
     @ResponseBody
-    public BaseRspEntity checkWhereCondition(@RequestParam(name = "payload") String payload, @RequestParam(name = "condition") String condition) {
+    public BaseRspEntity checkWhereCondition(@RequestParam(name = "payload") String payload, @RequestParam(name = "condition") String condition) throws IOException {
         BaseRspEntity resEntity = new BaseRspEntity(ConstantsHelper.RET_SUCCESS);
         RetCode ret = CEPRuleMQ.checkCondition(payload, condition);
 
@@ -117,7 +135,6 @@ public class CEPRuleController {
             resEntity.setErrorMsg(ret.getErrorMsg());
         }
 
-        log.info("ret:{}", JSONArray.toJSON(ret));
         return resEntity;
     }
 

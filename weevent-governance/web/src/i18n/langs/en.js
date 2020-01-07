@@ -191,13 +191,32 @@ module.exports = {
     'creatFail': 'Create fail',
     'ruleDataBaseId': 'JDBC Resources',
     'addAddress': 'New Database',
+    'addJDBCAddress': 'Add JDBC',
+    'editJDBCAddress': 'Edit JDBC',
+    'JDBCinfor': 'JDBC Information',
     'enterDB': 'Please input database JDBC URL',
     'JDBCname': 'JDBC Name',
+    'JDBCIP': 'JDBC IP',
+    'JDBCport': 'JDBC Port',
+    'JDBCDatabaseName': 'Database',
+    'JDBCdatabaseUrl': 'DatabaseUrl',
+    'JDBCusername': 'Username',
+    'JDBCpassword': 'Password',
     'tableName': 'Table Name',
+    'optionalParameter': 'Optional',
     'enterJDBCname': 'Please input database JDBC Name',
+    'enterJDBCIP': 'Please input database JDBC IP',
+    'enterJDBCport': 'Please input database JDBC Port',
+    'enterJDBCDatabaseName': 'Please input Database Name',
+    'enterJDBCDatabaseUrl': 'Please input Database Url',
+    'enterJDBCusername': 'Please input database Username',
+    'enterJDBCpassword': 'Please input database Password',
     'enterTableName': 'Please input database Table Name',
     'enditAddress': 'Edit Database',
-    'deleteAddress': 'Delete database?'
+    'deleteAddress': 'Delete database?',
+    'checkJDBC': 'Check JDBC',
+    'connectSuccess': 'JDBC Connect Success',
+    'connectFailed': 'JDBC Connect Failed'
   },
   ruleDetail: {
     'guideDetail': 'Data Guide Detail',
@@ -230,5 +249,31 @@ module.exports = {
     'guideAddress': 'Empty database',
     'abnormalAddress': 'Empty error database',
     'cannotSame': 'Cannot same with Streaming Target'
+  },
+  ruleStatic: {
+    'readRule': 'Read Rules',
+    'readInsideRule': 'System Rules',
+    'systemRules': 'System Rules',
+    'ruleName': 'Rule Name',
+    'hitTimes': 'Hit Times',
+    'notHitTimes': 'Hit Failed Times',
+    'successTimes': 'Successful Times',
+    'failTimes': 'Failed Times',
+    'startTime': 'Start Time',
+    'readFailRecord': 'Read Record',
+    'lastRecord': 'Last Time',
+    'runningStatus': 'Running Status',
+    'destinationType': 'Destination Type'
+  },
+  ruleCheck: {
+    'inputRule': 'please input completed rule',
+    'notNumber': 'data type error - not a number',
+    'inputInteger': 'data type error - not an integer',
+    'bigger': 'please input the value bigger then 0',
+    'inputString': 'please warp the string in double quotes',
+    'errorOperator': 'operator is error plese use != or ==',
+    'errorParameter': 'function error - parameter is error',
+    'errorIndex': 'function error - index is not a integer'
+
   }
 }

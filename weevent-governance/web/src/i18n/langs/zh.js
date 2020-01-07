@@ -191,13 +191,32 @@ module.exports = {
     'creatFail': '创建失败',
     'ruleDataBaseId': '数据源地址',
     'addAddress': '新增地址',
+    'addJDBCAddress': '新增数据源',
+    'editJDBCAddress': '编辑数据源',
+    'JDBCinfor': '数据源信息',
     'enterDB': '请填写DB地址',
     'JDBCname': '数据源名称',
+    'JDBCIP': '数据源IP',
+    'JDBCport': '数据源端口',
+    'JDBCDatabaseName': '库名',
+    'JDBCdatabaseUrl': '数据库链接',
+    'JDBCusername': '用户名',
+    'JDBCpassword': '密码',
     'tableName': '表名',
-    'enterJDBCname': '请输入数据源名称',
+    'optionalParameter': '可选参数',
+    'enterJDBCname': '请填写数据源名称',
+    'enterJDBCIP': '请填写数据源IP',
+    'enterJDBCport': '请填写数据源端口',
+    'enterJDBCDatabaseName': '请填写数据源库名',
+    'enterJDBCDatabaseUrl': '请填写数据源链接',
+    'enterJDBCusername': '请填写数据源用户名',
+    'enterJDBCpassword': '请填写数据源密码',
     'enterTableName': '请填写表名',
     'enditAddress': '修改地址',
-    'deleteAddress': '删除该地址？'
+    'deleteAddress': '删除该地址？',
+    'checkJDBC': '数据源检验',
+    'connectSuccess': '数据源地址连接成功',
+    'connectFailed': '数据源地址连接失败'
   },
   ruleDetail: {
     'guideDetail': '数据详情',
@@ -227,6 +246,30 @@ module.exports = {
     'setGuide': '前往配置',
     'guideAddress': '数据流转地址必须填写',
     'abnormalAddress': '异常流转地址必须填写',
-    'cannotSame': "[数据目的]不能和[数据来源]相同"
+    'cannotSame': '[数据目的]不能和[数据来源]相同'
+  },
+  ruleStatic: {
+    'readRule': '查看规则',
+    'readInsideRule': '查看系统规则',
+    'systemRules': '系统规则',
+    'ruleName': '规则名称',
+    'hitTimes': '命中次数',
+    'notHitTimes': '未命中次数',
+    'successTimes': '发布成功次数',
+    'failTimes': '发布失败次数',
+    'startTime': '启动时间',
+    'readFailRecord': '最后错误详情',
+    'lastRecord': '最后一次失败记录',
+    'runningStatus': '运行状态',
+    'destinationType': '流转目标类型'
+  },
+  ruleCheck: {
+    'inputRule': '请填写完整的条件语句',
+    'notNumber': '填写的数据不是数字类型',
+    'inputInteger': '方法异常，请填写整数类型',
+    'bigger': '输入值请大于0',
+    'inputString': '填写的数据类型错误-字符串类型请用双引号包裹',
+    'errorParameter': '该函数的参数错误',
+    'errorIndex': '该函数的下标不是整数类型'
   }
 }

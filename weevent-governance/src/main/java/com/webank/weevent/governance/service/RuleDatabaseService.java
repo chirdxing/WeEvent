@@ -1,5 +1,6 @@
 package com.webank.weevent.governance.service;
 
+import java.util.Date;
 import java.util.List;
 
 import javax.servlet.http.HttpServletRequest;
@@ -8,12 +9,14 @@ import javax.servlet.http.HttpServletResponse;
 import com.webank.weevent.governance.code.ErrorCode;
 import com.webank.weevent.governance.entity.RuleDatabaseEntity;
 import com.webank.weevent.governance.exception.GovernanceException;
-import com.webank.weevent.governance.mapper.RuleDatabaseMapper;
 import com.webank.weevent.governance.properties.ConstantProperties;
+import com.webank.weevent.governance.repository.RuleDatabaseRepository;
 import com.webank.weevent.governance.utils.CookiesTools;
 
 import lombok.extern.slf4j.Slf4j;
+import org.jsoup.helper.StringUtil;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Example;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,28 +31,36 @@ public class RuleDatabaseService {
     private CookiesTools cookiesTools;
 
     @Autowired
-    private RuleDatabaseMapper ruleDatabaseMapper;
+    private RuleDatabaseRepository ruleDatabaseRepository;
 
-    public List<RuleDatabaseEntity> circulationDatabaseList(HttpServletRequest request, RuleDatabaseEntity ruleDatabaseEntity) throws GovernanceException {
+    public List<RuleDatabaseEntity> getRuleDataBaseList(HttpServletRequest request, RuleDatabaseEntity ruleDatabaseEntity) throws GovernanceException {
         try {
             String accountId = cookiesTools.getCookieValueByName(request, ConstantProperties.COOKIE_MGR_ACCOUNT_ID);
             if (accountId == null || !accountId.equals(ruleDatabaseEntity.getUserId().toString())) {
                 throw new GovernanceException(ErrorCode.ACCESS_DENIED);
             }
-            List<RuleDatabaseEntity> CirculationDatabaseEntities = null;
-            ruleDatabaseEntity.setIsVisible("1");
-            CirculationDatabaseEntities = ruleDatabaseMapper.circulationDatabaseList(ruleDatabaseEntity);
-            return CirculationDatabaseEntities;
+            ruleDatabaseEntity.setSystemTag(false);
+            Example<RuleDatabaseEntity> entityExample = Example.of(ruleDatabaseEntity);
+            List<RuleDatabaseEntity> ruleDatabaseEntityList = ruleDatabaseRepository.findAll(entityExample);
+            ruleDatabaseEntityList.forEach(ruleDataBase -> {
+                String dataBaseUrl = ruleDataBase.getDatabaseUrl();
+                if (StringUtil.isBlank(ruleDataBase.getOptionalParameter())) {
+                    ruleDataBase.setDatabaseUrl(dataBaseUrl);
+                } else {
+                    ruleDataBase.setDatabaseUrl(dataBaseUrl + "?" + ruleDataBase.getOptionalParameter());
+                }
+            });
+            return ruleDatabaseEntityList;
         } catch (Exception e) {
-            log.error("get circulationDatabaseList fail", e);
-            throw new GovernanceException("get circulationDatabaseList fail", e);
+            log.error("get ruleDatabaseList fail", e);
+            throw new GovernanceException("get ruleDatabaseList fail", e);
         }
 
     }
 
 
     @Transactional(rollbackFor = Throwable.class)
-    public RuleDatabaseEntity addCirculationDatabase(RuleDatabaseEntity ruleDatabaseEntity, HttpServletRequest request, HttpServletResponse response)
+    public RuleDatabaseEntity addRuleDatabase(RuleDatabaseEntity ruleDatabaseEntity, HttpServletRequest request, HttpServletResponse response)
             throws GovernanceException {
         try {
             String accountId = cookiesTools.getCookieValueByName(request, ConstantProperties.COOKIE_MGR_ACCOUNT_ID);
@@ -57,45 +68,61 @@ public class RuleDatabaseService {
                 throw new GovernanceException(ErrorCode.ACCESS_DENIED);
             }
             //check dbUrl
-            commonService.checkDataBaseUrl(ruleDatabaseEntity.getDatabaseUrl(),ruleDatabaseEntity.getTableName());
-            ruleDatabaseEntity.setIsVisible("1");
-            ruleDatabaseMapper.addCirculationDatabase(ruleDatabaseEntity);
+            commonService.checkDataBaseUrl(ruleDatabaseEntity.getDatabaseUrl(), ruleDatabaseEntity.getTableName(), ruleDatabaseEntity.getUsername(), ruleDatabaseEntity.getPassword());
+            ruleDatabaseEntity.setSystemTag(false);
+            ruleDatabaseRepository.save(ruleDatabaseEntity);
             return ruleDatabaseEntity;
         } catch (Exception e) {
-            log.error("add circulationDatabaseEntity fail", e.getMessage());
-            throw new GovernanceException("add circulationDatabaseEntity fail ", e);
+            log.error("add ruleDatabaseEntity fail", e);
+            throw new GovernanceException("add ruleDatabaseEntity fail ", e);
         }
     }
 
     @Transactional(rollbackFor = Throwable.class)
-    public boolean deleteCirculationDatabase(RuleDatabaseEntity ruleDatabaseEntity, HttpServletRequest request) throws GovernanceException {
+    public void deleteRuleDatabase(RuleDatabaseEntity ruleDatabaseEntity, HttpServletRequest request) throws GovernanceException {
         try {
             String accountId = cookiesTools.getCookieValueByName(request, ConstantProperties.COOKIE_MGR_ACCOUNT_ID);
             if (accountId == null || !accountId.equals(ruleDatabaseEntity.getUserId().toString())) {
                 throw new GovernanceException(ErrorCode.ACCESS_DENIED);
             }
-            return ruleDatabaseMapper.deleteCirculationDatabase(ruleDatabaseEntity);
+            RuleDatabaseEntity databaseEntity = ruleDatabaseRepository.findById(ruleDatabaseEntity.getId());
+            if (databaseEntity == null) {
+                return;
+            }
+            ruleDatabaseRepository.delete(databaseEntity);
         } catch (Exception e) {
-            log.error("delete circulationDatabaseEntity fail", e);
-            throw new GovernanceException("delete circulationDatabaseEntity fail ", e);
+            log.error("delete ruleDatabaseEntity fail", e);
+            throw new GovernanceException("delete ruleDatabaseEntity fail ", e);
         }
     }
 
     @Transactional(rollbackFor = Throwable.class)
-    public boolean updateCirculationDatabase(RuleDatabaseEntity ruleDatabaseEntity, HttpServletRequest request, HttpServletResponse response)
+    public void updateRuleDatabase(RuleDatabaseEntity ruleDatabaseEntity, HttpServletRequest request, HttpServletResponse response)
             throws GovernanceException {
         try {
             String accountId = cookiesTools.getCookieValueByName(request, ConstantProperties.COOKIE_MGR_ACCOUNT_ID);
             if (accountId == null || !accountId.equals(ruleDatabaseEntity.getUserId().toString())) {
                 throw new GovernanceException(ErrorCode.ACCESS_DENIED);
             }
+            ruleDatabaseEntity.setSystemTag(false);
             //check databaseUrl
-            commonService.checkDataBaseUrl(ruleDatabaseEntity.getDatabaseUrl(),ruleDatabaseEntity.getTableName());
-            return ruleDatabaseMapper.updateCirculationDatabase(ruleDatabaseEntity);
+            commonService.checkDataBaseUrl(ruleDatabaseEntity.getDatabaseUrl(), ruleDatabaseEntity.getTableName(), ruleDatabaseEntity.getUsername(), ruleDatabaseEntity.getPassword());
+            ruleDatabaseEntity.setLastUpdate(new Date());
+            ruleDatabaseRepository.save(ruleDatabaseEntity);
         } catch (Exception e) {
-            log.error("update circulationDatabase fail", e);
-            throw new GovernanceException("update circulationDatabase fail", e);
+            log.error("update ruleDatabase fail", e);
+            throw new GovernanceException("update ruleDatabase fail", e);
         }
 
+    }
+
+    public void checkRuleDataBaseUrl(RuleDatabaseEntity ruleDatabaseEntity, HttpServletRequest request) throws GovernanceException {
+        try {
+            commonService.checkDataBaseUrl(ruleDatabaseEntity.getDatabaseUrl(), ruleDatabaseEntity.getTableName(), ruleDatabaseEntity.getUsername(),
+                    ruleDatabaseEntity.getPassword());
+        } catch (Exception e) {
+            log.error("database url is incorrect", e);
+            throw new GovernanceException("database url is incorrect", e);
+        }
     }
 }

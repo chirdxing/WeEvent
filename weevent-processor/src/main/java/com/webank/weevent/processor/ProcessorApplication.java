@@ -1,5 +1,7 @@
 package com.webank.weevent.processor;
 
+
+import com.webank.weevent.governance.utils.H2ServerUtil;
 import com.webank.weevent.processor.cache.CEPRuleCache;
 import com.webank.weevent.processor.config.ProcessorConfig;
 import com.webank.weevent.processor.mq.CEPRuleMQ;
@@ -12,6 +14,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.ApplicationPidFileWriter;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
+import org.springframework.core.env.Environment;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 
 @Slf4j
@@ -20,12 +23,15 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 public class ProcessorApplication {
     public static ProcessorConfig processorConfig;
     public static ApplicationContext applicationContext;
+    public static Environment environment;
+
     @Autowired
     public void setContext(ApplicationContext context) {
         applicationContext = context;
     }
 
-    public static void main(String[] args) {
+    public static void main(String[] args) throws Exception {
+        H2ServerUtil.startH2();
         log.info("start processor success");
         SpringApplication app = new SpringApplication(ProcessorApplication.class);
         app.addListeners(new ApplicationPidFileWriter());
@@ -38,6 +44,11 @@ public class ProcessorApplication {
         processorConfig = config;
     }
 
+    @Autowired
+    public void setEnvironment(org.springframework.core.env.Environment env) {
+        environment = env;
+    }
+
     private static void exit() {
         if (applicationContext != null) {
             System.exit(SpringApplication.exit(applicationContext));
@@ -45,7 +56,6 @@ public class ProcessorApplication {
             System.exit(1);
         }
     }
-
 
     @Bean(name = "processor_daemon_task_executor")
     public static ThreadPoolTaskExecutor getThreadPoolTaskExecutor() {
@@ -72,5 +82,3 @@ public class ProcessorApplication {
         return new CEPRuleMQ();
     }
 }
-
-

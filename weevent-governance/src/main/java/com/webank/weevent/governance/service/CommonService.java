@@ -7,7 +7,6 @@ import java.io.UnsupportedEncodingException;
 import java.net.URISyntaxException;
 import java.sql.Connection;
 import java.sql.DriverManager;
-import java.sql.ResultSet;
 import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.Enumeration;
@@ -22,7 +21,6 @@ import javax.servlet.http.HttpServletResponse;
 
 import com.webank.weevent.governance.code.ErrorCode;
 import com.webank.weevent.governance.exception.GovernanceException;
-import com.webank.weevent.governance.properties.ConstantProperties;
 import com.webank.weevent.governance.utils.SpringContextUtil;
 
 import lombok.extern.slf4j.Slf4j;
@@ -63,6 +61,8 @@ public class CommonService implements AutoCloseable {
     @Value("${http.client.socket-timeout:3000}")
     private int socketTimeout;
 
+    @Value("${spring.datasource.url}")
+    private String dataBaseUrl;
 
     public CloseableHttpResponse getCloseResponse(HttpServletRequest req, String newUrl) throws ServletException {
         CloseableHttpResponse closeResponse;
@@ -197,33 +197,16 @@ public class CommonService implements AutoCloseable {
         out.write(mes.getBytes());
     }
 
-
-    public void checkDataBaseUrl(String dataBaseUrl, String tableName) throws GovernanceException {
-        if (StringUtil.isBlank(dataBaseUrl)) {
-            return;
-        }
-        Map<String, String> stringStringMap = uRLRequest(dataBaseUrl);
-        String defaultUrl = dataBaseUrl.substring(0, dataBaseUrl.indexOf(ConstantProperties.QUESTION_MARK));
-        String user = stringStringMap.get("user");
-        String password = stringStringMap.get("password");
-        // first use database
-        int first = dataBaseUrl.lastIndexOf("/");
-        int end = dataBaseUrl.indexOf("?");
-        String dbName = dataBaseUrl.substring(first + 1, end);
-        try (Connection conn = DriverManager.getConnection(defaultUrl, user, password);
+    public void checkDataBaseUrl(String dataBaseUrl, String tableName, String user, String password) throws GovernanceException {
+        try (Connection conn = DriverManager.getConnection(dataBaseUrl, user, password);
              Statement stat = conn.createStatement()) {
-            if (conn != null) {
-                log.info("database connect success,dataBaseUrl:{}", dataBaseUrl);
+            if (stat == null) {
+                log.info("database connect fail,dataBaseUrl:{}", dataBaseUrl);
+                throw new GovernanceException("database connect success,dataBaseUrl:" + dataBaseUrl);
             }
-            String querySql = "SELECT t.table_name FROM information_schema.TABLES t WHERE t.TABLE_SCHEMA =" + "\"" + dbName + "\" AND t.table_name=\"" + tableName + "\"";
-            ResultSet resultSet = stat.executeQuery(querySql);
-            while (resultSet.next()) {
-                String name = resultSet.getString(1);
-                if (!tableName.equals(name)) {
-                    log.error("table: {}  is not exist!", tableName);
-                    throw new GovernanceException("table " + tableName + " is not exist!");
-                }
-            }
+            log.info("database connect success,dataBaseUrl:{}", dataBaseUrl);
+            String querySql = "SELECT 1 FROM " + tableName + " LIMIT 1";
+            stat.executeQuery(querySql);
         } catch (Exception e) {
             log.error("database url is error", e);
             throw new GovernanceException("database url is error", e);
@@ -242,37 +225,15 @@ public class CommonService implements AutoCloseable {
     public static Map<String, String> uRLRequest(String URL) {
         Map<String, String> mapRequest = new HashMap<>();
 
-        String[] arrSplit = null;
-
-        String strUrlParam = truncateUrlPage(URL);
-        if (strUrlParam == null) {
+        if (StringUtil.isBlank(URL)) {
             return mapRequest;
         }
-        arrSplit = strUrlParam.split("[&]");
-        for (String strSplit : arrSplit) {
-            String[] arrSplitEqual = null;
-            arrSplitEqual = strSplit.split("[=]");
-
-            if (arrSplitEqual.length > 1) {
-                mapRequest.put(arrSplitEqual[0], arrSplitEqual[1]);
-
-            } else {
-                if (!arrSplitEqual[0].equals("")) {
-                    mapRequest.put(arrSplitEqual[0], "");
-                }
-            }
+        String[] arrSplit = URL.split("[?]");
+        mapRequest.put("dataBaseUrl", arrSplit[0]);
+        if(arrSplit.length>1){
+            mapRequest.put("optionalParameter", arrSplit[1]);
         }
         return mapRequest;
-    }
-
-    private static String truncateUrlPage(String strURL) {
-        String strAllParam = null;
-        String[] arrSplit = strURL.split("[?]");
-        if ((strURL.length() > 1) && (arrSplit.length) > 1 && (arrSplit[1] != null)) {
-            strAllParam = arrSplit[1];
-        }
-
-        return strAllParam;
     }
 
 

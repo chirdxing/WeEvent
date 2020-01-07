@@ -6,11 +6,9 @@ import java.lang.reflect.Method;
 import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutionException;
@@ -31,8 +29,8 @@ import com.webank.weevent.sdk.BrokerException;
 import com.webank.weevent.sdk.ErrorCode;
 import com.webank.weevent.sdk.WeEvent;
 
-import com.alibaba.fastjson.JSONArray;
-import com.alibaba.fastjson.JSONObject;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.lang3.StringUtils;
@@ -63,7 +61,6 @@ import org.fisco.bcos.web3j.protocol.core.methods.response.TransactionReceipt;
 import org.fisco.bcos.web3j.tx.Contract;
 import org.fisco.bcos.web3j.tx.gas.ContractGasProvider;
 import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
-import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 
 /**
  * Wrapper of Web3SDK 2.x function.
@@ -85,7 +82,7 @@ public class Web3SDK2Wrapper {
     public final static String NODE_ID = "nodeId";
     public final static String PEERS = "peers";
     public final static String VIEW = "view";
-
+    private static ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     // static gas provider
     public static final ContractGasProvider gasProvider = new ContractGasProvider() {
@@ -118,7 +115,7 @@ public class Web3SDK2Wrapper {
      * @param groupId group id
      * @return Web3j
      */
-    public static Web3j initWeb3j(Long groupId, FiscoConfig fiscoConfig, ThreadPoolTaskExecutor poolTaskExecutor) throws BrokerException {
+    public static Web3j initWeb3j(Long groupId, FiscoConfig fiscoConfig) throws BrokerException {
         // init web3j with given group id
         try {
             log.info("begin to initialize web3sdk, group id: {}", groupId);
@@ -146,7 +143,8 @@ public class Web3SDK2Wrapper {
             connectionsConfig.setAllChannelConnections(Arrays.asList(channelConnections));
 
             service.setAllChannelConnections(connectionsConfig);
-            service.setThreadPool(poolTaskExecutor);
+            // special thread for TransactionSucCallback.onResponse, callback from IO thread directly if not setting
+            //service.setThreadPool(poolTaskExecutor);
             service.run();
 
             ChannelEthereumService channelEthereumService = new ChannelEthereumService();
@@ -414,8 +412,8 @@ public class Web3SDK2Wrapper {
             Long blockHeight = blockNumber.getBlockNumber().longValue();
             log.debug("current block height: {}", blockHeight);
             return blockHeight;
-        } catch (InterruptedException | ExecutionException | TimeoutException | RuntimeException e) {
-            log.error("get block height failed due to InterruptedException|ExecutionException|TimeoutException|RuntimeException", e);
+        } catch (InterruptedException | ExecutionException | TimeoutException e) {
+            log.error("get block height failed due to InterruptedException|ExecutionException|TimeoutException", e);
             throw new BrokerException(ErrorCode.GET_BLOCK_HEIGHT_ERROR);
         }
     }
@@ -474,14 +472,8 @@ public class Web3SDK2Wrapper {
             }
 
             return events;
-        } catch (TimeoutException e) {
-            log.error("loop block failed due to timeout", e);
-            return null;
-        } catch (ExecutionException | NullPointerException | InterruptedException e) { // Web3sdk's rpc return null
+        } catch (ExecutionException | NullPointerException | InterruptedException |TimeoutException e) { // Web3sdk's rpc return null
             // Web3sdk send async will arise InterruptedException
-            log.error("loop block failed due to web3sdk rpc error", e);
-            return null;
-        } catch (RuntimeException e) {
             log.error("loop block failed due to web3sdk rpc error", e);
             throw new BrokerException(ErrorCode.WEB3SDK_RPC_ERROR);
         }
@@ -506,9 +498,6 @@ public class Web3SDK2Wrapper {
             return groupGeneral;
         } catch (ExecutionException | TimeoutException | NullPointerException | InterruptedException e) { // Web3sdk's rpc return null
             // Web3sdk send async will arise InterruptedException
-            log.error("get group general failed due to web3sdk rpc error", e);
-            throw new BrokerException(ErrorCode.WEB3SDK_RPC_ERROR);
-        } catch (RuntimeException e) {
             log.error("get group general failed due to web3sdk rpc error", e);
             throw new BrokerException(ErrorCode.WEB3SDK_RPC_ERROR);
         }
@@ -542,9 +531,6 @@ public class Web3SDK2Wrapper {
             return tbTransHashListPage;
         } catch (ExecutionException | TimeoutException | NullPointerException | InterruptedException e) { // Web3sdk's rpc return null
             // Web3sdk send async will arise InterruptedException
-            log.error("query transaction failed due to web3sdk rpc error", e);
-            throw new BrokerException("query transaction failed due to RuntimeException", e);
-        } catch (RuntimeException e) {
             log.error("query transaction failed due to web3sdk rpc error", e);
             throw new BrokerException(ErrorCode.WEB3SDK_RPC_ERROR);
         }
@@ -582,51 +568,49 @@ public class Web3SDK2Wrapper {
     public static ListPage<TbBlock> queryBlockList(Web3j web3j, String blockHash, BigInteger blockNumber, Integer pageIndex, Integer pageSize) throws BrokerException {
         ListPage<TbBlock> tbBlockListPage = new ListPage<>();
         List<TbBlock> tbBlocks = new CopyOnWriteArrayList<>();
-        Integer blcokCount = 0;
+        Integer blockCount;
         try {
             BcosBlock.Block block;
             if (blockHash != null) {
                 BcosBlock bcosBlock = web3j.getBlockByHash(blockHash, true)
                         .sendAsync().get(FiscoBcosDelegate.timeout, TimeUnit.MILLISECONDS);
                 block = bcosBlock.getBlock();
-                blcokCount = 1;
+                blockCount = 1;
                 getTbBlockList(tbBlocks, block);
             } else if (blockNumber != null) {
                 BcosBlock bcosBlock = web3j.getBlockByNumber(new DefaultBlockParameterNumber(blockNumber), true)
                         .sendAsync().get(FiscoBcosDelegate.timeout, TimeUnit.MILLISECONDS);
                 block = bcosBlock.getBlock();
-                blcokCount = 1;
+                blockCount = 1;
                 getTbBlockList(tbBlocks, block);
             } else {
-                BigInteger blockNum = web3j.getBlockNumber().sendAsync().get(FiscoBcosDelegate.timeout, TimeUnit.MILLISECONDS).getBlockNumber();
+                Integer blockNum = web3j.getBlockNumber().sendAsync().get(FiscoBcosDelegate.timeout, TimeUnit.MILLISECONDS).getBlockNumber().intValue();
 
-                if (pageIndex < 1 || (pageIndex-1) * pageSize > blockNum.longValue()) {
+                if (pageIndex < 1 || (pageIndex - 1) * pageSize > blockNum.longValue()) {
                     log.error("pageIndex error.");
                     throw new BrokerException("pageIndex error.");
                 }
-                Integer blockSize = (blockNum.longValue() <= pageIndex * pageSize) ? (Integer.valueOf(blockNum.toString()) - ((pageIndex-1) * pageSize)) : pageSize;
-                long blockNumberIndex = (pageIndex-1) * pageSize + 1;
+                Integer blockSize = (blockNum.longValue() <= pageIndex * pageSize) ? (blockNum - ((pageIndex - 1) * pageSize)) : pageSize;
+                long blockNumberIndex = (pageIndex - 1) * pageSize + 1;
 
                 List<Long> blockNums = new ArrayList<>();
                 for (int i = 0; i < blockSize; i++) {
                     blockNums.add(blockNumberIndex);
-                    blockNumberIndex ++;
+                    blockNumberIndex++;
                 }
-                blcokCount = blockNum.intValue();
+                blockCount = blockNum;
                 tbBlocks = getTbBlock(web3j, blockNums);
 
-                Collections.sort(tbBlocks, (arg0, arg1) -> arg1.getBlockNumber().compareTo(arg0.getBlockNumber()));
+                tbBlocks.sort((arg0, arg1) -> arg1.getBlockNumber().compareTo(arg0.getBlockNumber()));
             }
+
             tbBlockListPage.setPageIndex(pageIndex);
             tbBlockListPage.setPageSize(pageSize);
-            tbBlockListPage.setTotal(blcokCount);
+            tbBlockListPage.setTotal(blockCount);
             tbBlockListPage.setPageData(tbBlocks);
             return tbBlockListPage;
         } catch (ExecutionException | TimeoutException | NullPointerException | InterruptedException e) { // Web3sdk's rpc return null
             // Web3sdk send async will arise InterruptedException
-            log.error("query transaction failed due to web3sdk rpc error", e);
-            throw new BrokerException(ErrorCode.WEB3SDK_RPC_ERROR);
-        } catch (RuntimeException e) {
             log.error("query transaction failed due to web3sdk rpc error", e);
             throw new BrokerException(ErrorCode.WEB3SDK_RPC_ERROR);
         }
@@ -691,53 +675,43 @@ public class Web3SDK2Wrapper {
             // Web3sdk send async will arise InterruptedException
             log.error("query node failed due to web3sdk rpc error", e);
             throw new BrokerException(ErrorCode.WEB3SDK_RPC_ERROR);
-        } catch (RuntimeException e) {
-            log.error("query node failed due to web3sdk rpc error", e);
-            throw new BrokerException(ErrorCode.WEB3SDK_RPC_ERROR);
         }
     }
 
     private static Map<String, Map<String, String>> getNodeViews(Web3j web3j) throws IOException {
-        JSONArray consensusStatusArr = JSONObject.parseArray(web3j.getConsensusStatus().sendForReturnString());
-        Map<String, Map<String, String>> nodeviews = new HashMap<>();
-        for (int i =0; i < consensusStatusArr.size(); i++){
-            Object jsonObj = consensusStatusArr.get(i);
-            if (jsonObj instanceof JSONArray) {
-                convertJSONArrayToList(nodeviews, (JSONArray) jsonObj);
+        JsonNode jsonNode = OBJECT_MAPPER.readTree(web3j.getConsensusStatus().sendForReturnString());
+        Map<String, Map<String, String>> nodeViews = new HashMap<>();
+        for (JsonNode node : jsonNode) {
+            if(node.isArray()) {
+                convertJsonArrayToList(nodeViews, node);
             }
         }
-        return nodeviews;
+        return nodeViews;
     }
 
     private static Map<String, Map<String, String>> getBlockNums(Web3j web3j) throws IOException {
-        JSONObject syncStatusArr = JSONObject.parseObject(web3j.getSyncStatus().sendForReturnString());
+        JsonNode jsonObj = OBJECT_MAPPER.readTree(web3j.getSyncStatus().sendForReturnString());
         Map<String, Map<String, String>> nodeBlockNums = new HashMap<>();
-        Set<String> set = syncStatusArr.keySet();
+
         Map<String, String> map = new HashMap<>();
-        for (String s : set) {
-            if (BLOCK_NUMBER.equals(s) || NODE_ID.equals(s)) {
-                map.put(s, syncStatusArr.getString(s));
+        jsonObj.fields().forEachRemaining(entry -> {
+            if (BLOCK_NUMBER.equals(entry.getKey()) || NODE_ID.equals(entry.getKey())) {
+                map.put(entry.getKey(), entry.getValue().asText());
             }
-            if (PEERS.equals(s)) {
-                String peersListStr = syncStatusArr.getString(s);
-                JSONArray peersListJSONArray = JSONObject.parseArray(peersListStr);
-                convertJSONArrayToList(nodeBlockNums, peersListJSONArray);
+            if (PEERS.equals(entry.getKey())) {
+                convertJsonArrayToList(nodeBlockNums, entry.getValue());
             }
-        }
-        nodeBlockNums.put(syncStatusArr.getString(NODE_ID), map);
+        });
+        nodeBlockNums.put(jsonObj.get(NODE_ID).asText(), map);
         return nodeBlockNums;
     }
 
-    private static void convertJSONArrayToList(Map<String, Map<String, String>> map, JSONArray jsonObj) {
-        for (int i = 0; i < jsonObj.size(); i++) {
-            Object object = jsonObj.get(i);
-            if (object instanceof JSONObject) {
-                Set<String> keySet = ((JSONObject) object).keySet();
+    private static void convertJsonArrayToList(Map<String, Map<String, String>> map, JsonNode jsonArray) {
+        for (JsonNode jsonObj : jsonArray) {
+            if (jsonObj.isObject()) {
                 Map<String, String> objMap = new HashMap<>();
-                for (String key : keySet) {
-                    objMap.put(key, ((JSONObject) object).getString(key));
-                }
-                map.put(objMap.get(NODE_ID), objMap);
+                jsonObj.fields().forEachRemaining(entry -> objMap.put(entry.getKey(), entry.getValue().asText()));
+                map.put(jsonObj.get(NODE_ID).asText(), objMap);
             }
         }
     }
@@ -763,51 +737,43 @@ public class Web3SDK2Wrapper {
 
     private static int checkNodeActive(String nodeId, List<String> nodeIds) {
         // 1 means node active; 0 means inactive
-        return nodeIds.contains(nodeId)? 1 : 0;
+        return nodeIds.contains(nodeId) ? 1 : 0;
     }
 
-    private static CopyOnWriteArrayList<TbBlock> getTbBlock(Web3j web3j, List<Long> blockNums) throws ExecutionException, InterruptedException {
+    private static List<TbBlock> getTbBlock(Web3j web3j, List<Long> blockNums) throws ExecutionException, InterruptedException {
 
-        CompletableFuture<List<TbBlock>>[] completableFutureArr = new CompletableFuture[blockNums.size()];
-        CopyOnWriteArrayList<TbBlock> tbBlocks = new CopyOnWriteArrayList<>();
-        for (int i = 0; i < blockNums.size(); i++) {
-            long blockNumber = blockNums.get(i);
-            CompletableFuture<List<TbBlock>> future = CompletableFuture.supplyAsync(() ->{
-                BcosBlock bcosBlock = null;
+        List<CompletableFuture<TbBlock>> futureList = new ArrayList<>();
+        for (Long blockNumber : blockNums) {
+            CompletableFuture<TbBlock> future = CompletableFuture.supplyAsync(() -> {
+                BcosBlock bcosBlock;
                 try {
                     bcosBlock = web3j.getBlockByNumber(new DefaultBlockParameterNumber(blockNumber), true)
                             .sendAsync().get(FiscoBcosDelegate.timeout, TimeUnit.MILLISECONDS);
-                } catch (InterruptedException |ExecutionException |TimeoutException e) {
+                } catch (InterruptedException | ExecutionException | TimeoutException e) {
                     log.error("query block by blockNumber failed. e:", e);
                     return null;
                 }
                 BcosBlock.Block block = bcosBlock.getBlock();
-
                 if (block == null) {
                     return null;
                 }
 
                 String blockTimestamp = DataTypeUtils.getTimestamp(block.getTimestamp().longValue());
-
                 int transactions = 0;
                 if (!block.getTransactions().isEmpty()) {
                     transactions = block.getTransactions().size();
                 }
                 int sealerIndex = Integer.parseInt(block.getSealer().substring(2), 16);
-                TbBlock tbBlock = new TbBlock(block.getHash(), block.getNumber(), blockTimestamp,
-                        transactions, sealerIndex);
+                TbBlock tbBlock = new TbBlock(block.getHash(), block.getNumber(), blockTimestamp, transactions, sealerIndex);
                 tbBlock.setSealer(block.getSealer());
-                tbBlocks.add(tbBlock);
-                return tbBlocks;
+                return tbBlock;
             });
 
-            completableFutureArr[i] = future;
+            futureList.add(future);
         }
 
-        CompletableFuture<Void> combindFuture = CompletableFuture.allOf(completableFutureArr);
-        combindFuture.get();
-
-        return tbBlocks;
+        return CompletableFuture.allOf(futureList.toArray(new CompletableFuture[0]))
+                .thenApply(v -> futureList.stream().map(CompletableFuture::join).collect(Collectors.toList())).get();
     }
 }
 

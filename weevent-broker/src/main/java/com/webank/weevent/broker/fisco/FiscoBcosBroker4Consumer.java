@@ -6,6 +6,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executor;
 
 import com.webank.weevent.BrokerApplication;
 import com.webank.weevent.broker.fisco.dto.SubscriptionInfo;
@@ -22,7 +23,6 @@ import com.webank.weevent.sdk.WeEvent;
 import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
-import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 
 /**
  * Event broker's consumer implement in FISCO-BCOS.
@@ -44,9 +44,9 @@ public class FiscoBcosBroker4Consumer extends FiscoBcosTopicAdmin implements ICo
     private Map<Long, MainEventLoop> mainEventLoops = new ConcurrentHashMap<>();
 
     /**
-     * daemon thread pool
+     * daemon executor
      */
-    private ThreadPoolTaskExecutor threadPoolTaskExecutor;
+    private Executor executor;
 
     /**
      * Whether the Consumer has started
@@ -58,11 +58,12 @@ public class FiscoBcosBroker4Consumer extends FiscoBcosTopicAdmin implements ICo
      */
     private int idleTime;
 
-    public FiscoBcosBroker4Consumer() {
-        super();
+    public FiscoBcosBroker4Consumer(FiscoBcosDelegate fiscoBcosDelegate) {
+        super(fiscoBcosDelegate);
 
-        this.threadPoolTaskExecutor = (ThreadPoolTaskExecutor) BrokerApplication.applicationContext.getBean("weevent_daemon_task_executor");
-        this.idleTime = fiscoConfig.getConsumerIdleTime();
+        // spring default Executor
+        this.executor = BrokerApplication.applicationContext.getBean("taskExecutor", Executor.class);
+        this.idleTime = fiscoBcosDelegate.getFiscoConfig().getConsumerIdleTime();
         fiscoBcosDelegate.setListener(this);
     }
 
@@ -186,7 +187,7 @@ public class FiscoBcosBroker4Consumer extends FiscoBcosTopicAdmin implements ICo
                 offset,
                 tag,
                 listener);
-        subscription.setMergeBlock(fiscoConfig.getConsumerHistoryMergeBlock());
+        subscription.setMergeBlock(fiscoBcosDelegate.getFiscoConfig().getConsumerHistoryMergeBlock());
         subscription.setInterfaceType(interfaceType);
         subscription.setRemoteIp(remoteIp);
 
@@ -228,7 +229,7 @@ public class FiscoBcosBroker4Consumer extends FiscoBcosTopicAdmin implements ICo
 
         // load MainEventLoop with configuration
         for (String groupId : fiscoBcosDelegate.listGroupId()) {
-            MainEventLoop mainEventLoop = new MainEventLoop(this.threadPoolTaskExecutor, this, groupId);
+            MainEventLoop mainEventLoop = new MainEventLoop(this.executor, this, groupId);
             mainEventLoop.doStart();
             Long gid = Long.valueOf(groupId);
             this.mainEventLoops.put(gid, mainEventLoop);
@@ -261,7 +262,7 @@ public class FiscoBcosBroker4Consumer extends FiscoBcosTopicAdmin implements ICo
         Map<String, Object> subscribeIdList = new HashMap<>();
         for (Map.Entry<String, Subscription> entry : this.subscriptions.entrySet()) {
             Subscription subscription = entry.getValue();
-            if (!groupId.equals(subscription.getGroupId())){
+            if (!groupId.equals(subscription.getGroupId())) {
                 continue;
             }
 

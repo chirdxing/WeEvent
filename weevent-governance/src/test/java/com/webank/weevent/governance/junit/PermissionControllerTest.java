@@ -1,6 +1,9 @@
 package com.webank.weevent.governance.junit;
 
+import java.util.Map;
+
 import com.webank.weevent.governance.JUnitTestBase;
+import com.webank.weevent.governance.utils.JsonUtil;
 
 import lombok.extern.slf4j.Slf4j;
 import org.apache.http.HttpStatus;
@@ -43,7 +46,9 @@ public class PermissionControllerTest extends JUnitTestBase {
         MvcResult mvcResult = mockMvc.perform(MockMvcRequestBuilders.post("/permission/permissionList").contentType(MediaType.APPLICATION_JSON_UTF8).content(content)).andReturn();
         MockHttpServletResponse response = mvcResult.getResponse();
         Assert.assertEquals(response.getStatus(), HttpStatus.SC_OK);
-        Assert.assertTrue(response.getContentAsString().contains("true"));
+
+        Map jsonObject = JsonUtil.parseObject(response.getContentAsString(),Map.class);
+        Assert.assertEquals(jsonObject.get("status").toString(),"200");
     }
 
 

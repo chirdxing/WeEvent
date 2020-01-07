@@ -5,18 +5,17 @@ import java.lang.reflect.InvocationTargetException;
 import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
-import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.stream.Collectors;
 
 import com.webank.weevent.broker.fabric.config.FabricConfig;
 import com.webank.weevent.broker.fabric.dto.TransactionInfo;
@@ -89,7 +88,7 @@ public class FabricSDKWrapper {
         return channel;
     }
 
-    public static Orderer getOrderer(HFClient client, FabricConfig fabricConfig) throws InvalidArgumentException {
+    private static Orderer getOrderer(HFClient client, FabricConfig fabricConfig) throws InvalidArgumentException {
         Properties orderer1Prop = new Properties();
         orderer1Prop.setProperty("pemFile", fabricConfig.getOrdererTlsCaFile());
         orderer1Prop.setProperty("sslProvider", "openSSL");
@@ -98,8 +97,7 @@ public class FabricSDKWrapper {
         orderer1Prop.setProperty("hostnameOverride", "orderer");
         orderer1Prop.setProperty("trustServerCertificate", "true");
         orderer1Prop.setProperty("allowAllHostNames", "true");
-        Orderer orderer = client.newOrderer("orderer", fabricConfig.getOrdererAddress(), orderer1Prop);
-        return orderer;
+        return client.newOrderer("orderer", fabricConfig.getOrdererAddress(), orderer1Prop);
     }
 
     public static Peer getPeer(HFClient client, FabricConfig fabricConfig) throws InvalidArgumentException {
@@ -110,8 +108,7 @@ public class FabricSDKWrapper {
         peer0Prop.setProperty("hostnameOverride", "peer0");
         peer0Prop.setProperty("trustServerCertificate", "true");
         peer0Prop.setProperty("allowAllHostNames", "true");
-        Peer peer = client.newPeer("peer0", fabricConfig.getPeerAddress(), peer0Prop);
-        return peer;
+        return client.newPeer("peer0", fabricConfig.getPeerAddress(), peer0Prop);
     }
 
     public static ChaincodeID getChainCodeID(String chaincodeName, String chaincodeVersion) {
@@ -130,8 +127,7 @@ public class FabricSDKWrapper {
         installProposalRequest.setChaincodeLanguage(chaincodeLang);
         installProposalRequest.setChaincodeSourceLocation(new File(chaincodeSourceLoc));
         installProposalRequest.setChaincodePath(chaincodePath);
-        Collection<ProposalResponse> propResp = client.sendInstallProposal(installProposalRequest, channel.getPeers());
-        return propResp;
+        return client.sendInstallProposal(installProposalRequest, channel.getPeers());
     }
 
     public static Collection<ProposalResponse> instantiateProposal(HFClient client, Channel channel, ChaincodeID chaincodeID,
@@ -148,13 +144,12 @@ public class FabricSDKWrapper {
         transientMap.put("HyperLedgerFabric", "InstantiateProposalRequest:JavaSDK".getBytes(UTF_8));
         transientMap.put("method", "InstantiateProposalRequest".getBytes(UTF_8));
         instantiateProposalRequest.setTransientMap(transientMap);
-        Collection<ProposalResponse> propResp = channel.sendInstantiationProposal(instantiateProposalRequest, channel.getPeers());
-        return propResp;
+        return channel.sendInstantiationProposal(instantiateProposalRequest, channel.getPeers());
     }
 
     public static BlockEvent.TransactionEvent sendTransaction(Channel channel, Collection<ProposalResponse> propResp, Long transactionTimeout) throws InvalidArgumentException, InterruptedException, ExecutionException, TimeoutException {
-        List<ProposalResponse> successful = new LinkedList<ProposalResponse>();
-        List<ProposalResponse> failed = new LinkedList<ProposalResponse>();
+        List<ProposalResponse> successful = new LinkedList<>();
+        List<ProposalResponse> failed = new LinkedList<>();
         for (ProposalResponse response : propResp) {
             if (response.getStatus() == ProposalResponse.Status.SUCCESS) {
                 String payload = new String(response.getChaincodeActionResponsePayload());
@@ -169,8 +164,7 @@ public class FabricSDKWrapper {
         }
 
         CompletableFuture<BlockEvent.TransactionEvent> carfuture = channel.sendTransaction(successful);
-        BlockEvent.TransactionEvent transactionEvent = carfuture.get(transactionTimeout, TimeUnit.MILLISECONDS);
-        return transactionEvent;
+        return carfuture.get(transactionTimeout, TimeUnit.MILLISECONDS);
     }
 
     public static TransactionInfo executeTransaction(HFClient client, Channel channel, ChaincodeID chaincodeID, boolean invoke, String func,
@@ -188,7 +182,7 @@ public class FabricSDKWrapper {
         // there is no need to retry. If not, you should re-send the transaction proposal.
         Collection<ProposalResponse> transactionPropResp = channel.sendTransactionProposal(transactionProposalRequest);
         TransactionInfo transactionInfo = new TransactionInfo();
-        Boolean result = true;
+        boolean result = true;
         for (ProposalResponse response : transactionPropResp) {
             if (response.getStatus() == ProposalResponse.Status.SUCCESS) {
                 transactionInfo.setCode(ErrorCode.SUCCESS.getCode());
@@ -213,6 +207,57 @@ public class FabricSDKWrapper {
             log.info("Wait event return: " + transactionEvent.getChannelId() + " " + transactionEvent.getTransactionID() + " " + transactionEvent.getType() + " " + transactionEvent.getValidationCode());
         }
         return transactionInfo;
+    }
+
+    public static CompletableFuture<TransactionInfo> executeTransactionAsync(HFClient client, Channel channel, ChaincodeID chaincodeID, boolean invoke, String func,
+                                                                             String... args) throws InvalidArgumentException, ProposalException {
+        TransactionProposalRequest transactionProposalRequest = client.newTransactionProposalRequest();
+        transactionProposalRequest.setChaincodeID(chaincodeID);
+        transactionProposalRequest.setChaincodeLanguage(TransactionRequest.Type.GO_LANG);
+
+        transactionProposalRequest.setFcn(func);
+        transactionProposalRequest.setArgs(args);
+        transactionProposalRequest.setProposalWaitTime(120000);
+
+        List<ProposalResponse> successful = new LinkedList<>();
+        List<ProposalResponse> failed = new LinkedList<>();
+        // there is no need to retry. If not, you should re-send the transaction proposal.
+        Collection<ProposalResponse> transactionPropResp = channel.sendTransactionProposal(transactionProposalRequest);
+        TransactionInfo transactionInfo = new TransactionInfo();
+        boolean result = true;
+        for (ProposalResponse response : transactionPropResp) {
+            if (response.getStatus() == ProposalResponse.Status.SUCCESS) {
+                transactionInfo.setCode(ErrorCode.SUCCESS.getCode());
+                transactionInfo.setPayLoad(new String(response.getChaincodeActionResponsePayload()));
+                log.info("[√] Got success response from peer:{} , payload:{}", response.getPeer().getName(), transactionInfo.getPayLoad());
+                successful.add(response);
+            } else {
+                result = false;
+                transactionInfo.setCode(ErrorCode.FABRICSDK_CHAINCODE_INVOKE_FAILED.getCode());
+                transactionInfo.setMessage(response.getMessage());
+                String status = response.getStatus().toString();
+                log.error("[×] Got failed response from peer:{}, status:{}, error message:{}", response.getPeer().getName(), status, transactionInfo.getMessage());
+                failed.add(response);
+            }
+        }
+
+        if (invoke && result) {
+            log.info("Sending transaction to orders...");
+            return channel.sendTransaction(successful).thenApply(
+                    (transactionEvent) -> {
+                        log.info("Wait event return: {} {} {} {}",
+                                transactionEvent.getChannelId(),
+                                transactionEvent.getTransactionID(),
+                                transactionEvent.getType(),
+                                transactionEvent.getValidationCode());
+                        transactionInfo.setBlockNumber(transactionEvent.getBlockEvent().getBlockNumber());
+                        return transactionInfo;
+                    });
+        }
+
+        CompletableFuture<TransactionInfo> completableFuture = new CompletableFuture<>();
+        completableFuture.complete(transactionInfo);
+        return completableFuture;
     }
 
     public static List<WeEvent> getBlockChainInfo(Channel channel, Long blockNumber) throws ProposalException, InvalidArgumentException {
@@ -240,18 +285,6 @@ public class FabricSDKWrapper {
         return weEventList;
     }
 
-    public static List<String> listChannelName(FabricConfig fabricConfig) throws BrokerException {
-        try {
-            HFClient hfClient = initializeClient(fabricConfig);
-            Peer peer = getPeer(hfClient, fabricConfig);
-            Set<String> channels = hfClient.queryChannels(peer);
-            return new ArrayList<>(channels);
-        } catch (Exception e) {
-            log.error("get channel name list failed , e: ", e);
-            throw new BrokerException(ErrorCode.TRANSACTION_EXECUTE_ERROR);
-        }
-    }
-
     public static GroupGeneral getGroupGeneral(Channel channel) throws InvalidArgumentException, ProposalException {
         GroupGeneral groupGeneral = new GroupGeneral();
         long currentBlockNum = channel.queryBlockchainInfo().getHeight() - 1;
@@ -269,7 +302,7 @@ public class FabricSDKWrapper {
         ListPage<TbTransHash> tbTransHashListPage = new ListPage<>();
         List<TbTransHash> tbTransHashes = new ArrayList<>();
 
-        BlockInfo blockInfo = null;
+        BlockInfo blockInfo;
         if (!StringUtils.isBlank(blockHash)) {
             blockInfo = channel.queryBlockByHash(Hex.decodeHex(blockHash));
         } else {
@@ -290,7 +323,7 @@ public class FabricSDKWrapper {
                                                     Integer pageSize,
                                                     ListPage<TbTransHash> tbTransHashListPage,
                                                     List<TbTransHash> tbTransHashes,
-                                                    BlockInfo blockInfo) throws BrokerException{
+                                                    BlockInfo blockInfo) throws BrokerException {
         Integer transCount = blockInfo.getTransactionCount();
 
         if (pageIndex < 1 || (pageIndex - 1) * pageSize > transCount) {
@@ -302,14 +335,14 @@ public class FabricSDKWrapper {
 
 
         Iterable<BlockInfo.EnvelopeInfo> envelopeInfos = blockInfo.getEnvelopeInfos();
-        for (BlockInfo.EnvelopeInfo envelopeInfo : envelopeInfos) {
+        envelopeInfos.forEach(envelopeInfo -> {
             TbTransHash tbTransHash = new TbTransHash();
             tbTransHash.setCreateTime(DataTypeUtils.getTimestamp(envelopeInfo.getTimestamp()));
             tbTransHash.setBlockTimestamp(DataTypeUtils.getTimestamp(envelopeInfo.getTimestamp()));
             tbTransHash.setTransHash(envelopeInfo.getTransactionID());
             tbTransHash.setBlockNumber(BigInteger.valueOf(blockInfo.getBlockNumber()));
             tbTransHashes.add(tbTransHash);
-        }
+        });
 
         if (tbTransHashes != null && !tbTransHashes.isEmpty()) {
             tbTransHashes.subList(transIndexStart, transSize + transIndexStart);
@@ -328,50 +361,50 @@ public class FabricSDKWrapper {
                                                    Integer pageSize) throws ProposalException, InvalidArgumentException, ExecutionException, InterruptedException, DecoderException, InvalidProtocolBufferException {
         ListPage<TbBlock> tbBlockListPage = new ListPage<>();
         List<TbBlock> tbBlocks = new CopyOnWriteArrayList<>();
-        Integer blcokTotalCount = 0;
+        int blockTotalCount;
 
         BlockInfo lastestblockInfo = getBlockInfo(fabricConfig, channel, null);
-        BlockInfo blockInfo = null;
+        BlockInfo blockInfo;
 
         TbBlock tbBlock = new TbBlock();
         if (!StringUtils.isBlank(blockHash)) {
             blockInfo = channel.queryBlockByHash(Hex.decodeHex(blockHash));
             generateTbBlock(channel, BigInteger.valueOf(blockInfo.getBlockNumber()), lastestblockInfo, blockInfo, tbBlock);
             tbBlocks.add(tbBlock);
-            blcokTotalCount = 1;
+            blockTotalCount = 1;
         } else if (blockNumber != null) {
             blockInfo = getBlockInfo(fabricConfig, channel, blockNumber);
             generateTbBlock(channel, blockNumber, lastestblockInfo, blockInfo, tbBlock);
             tbBlocks.add(tbBlock);
-            blcokTotalCount = 1;
+            blockTotalCount = 1;
         } else {
             BlockchainInfo blockchainInfo = channel.queryBlockchainInfo();
-            blockInfo = getBlockInfo(fabricConfig, channel, blockNumber);
-            Long lastestblcokNum = blockInfo.getBlockNumber();
+            blockInfo = getBlockInfo(fabricConfig, channel, null);
+            long lastestblcokNum = blockInfo.getBlockNumber();
 
-            Integer blockSize = (lastestblcokNum.intValue() <= pageIndex * pageSize) ? (lastestblcokNum.intValue() - ((pageIndex-1) * pageSize)) : pageSize;
-            long blockNumberIndex = (pageIndex-1) * pageSize + 1;
+            int blockSize = ((int) lastestblcokNum <= pageIndex * pageSize) ? ((int) lastestblcokNum - ((pageIndex - 1) * pageSize)) : pageSize;
+            long blockNumberIndex = (pageIndex - 1) * pageSize + 1;
 
             List<Long> blockNums = new ArrayList<>();
             for (int i = 0; i < blockSize; i++) {
                 blockNums.add(blockNumberIndex);
-                blockNumberIndex ++;
+                blockNumberIndex++;
             }
 
             tbBlocks = getTbBlocKList(channel, blockNums, blockchainInfo);
-            blcokTotalCount = Integer.valueOf(String.valueOf(lastestblockInfo.getBlockNumber()));
-            Collections.sort(tbBlocks, (arg0, arg1) -> arg1.getBlockNumber().compareTo(arg0.getBlockNumber()));
+            blockTotalCount = Integer.parseInt(String.valueOf(lastestblockInfo.getBlockNumber()));
+            tbBlocks.sort((arg0, arg1) -> arg1.getBlockNumber().compareTo(arg0.getBlockNumber()));
         }
 
         tbBlockListPage.setPageSize(pageSize);
         tbBlockListPage.setPageIndex(pageIndex);
-        tbBlockListPage.setTotal(blcokTotalCount);
+        tbBlockListPage.setTotal(blockTotalCount);
         tbBlockListPage.setPageData(tbBlocks);
         return tbBlockListPage;
     }
 
     private static void generateTbBlock(Channel channel, BigInteger blockNumber, BlockInfo lastestblockInfo, BlockInfo blockInfo, TbBlock tbBlock) throws InvalidArgumentException, ProposalException, InvalidProtocolBufferException {
-        if (!blockNumber.equals(lastestblockInfo.getBlockNumber())) {
+        if (blockNumber.longValue() != lastestblockInfo.getBlockNumber()) {
             BlockInfo nextBlockInfo = channel.queryBlockByNumber(blockNumber.longValue() + 1);
             tbBlock.setPkHash(Hex.encodeHexString(nextBlockInfo.getPreviousHash()));
         } else {
@@ -385,17 +418,14 @@ public class FabricSDKWrapper {
         tbBlock.setBlockNumber(blockNumber);
     }
 
-    private static CopyOnWriteArrayList<TbBlock> getTbBlocKList(Channel channel, List<Long> blockNums, BlockchainInfo blockchainInfo) throws ExecutionException, InterruptedException {
-
-        CompletableFuture<List<TbBlock>>[] completableFutureArr = new CompletableFuture[blockNums.size()];
-        CopyOnWriteArrayList<TbBlock> tbBlocks = new CopyOnWriteArrayList<>();
-        for (int i = 0; i < blockNums.size(); i++) {
-            long blockNumber = blockNums.get(i);
-            CompletableFuture<List<TbBlock>> future = CompletableFuture.supplyAsync(() ->{
+    private static List<TbBlock> getTbBlocKList(Channel channel, List<Long> blockNums, BlockchainInfo blockchainInfo) throws ExecutionException, InterruptedException {
+        List<CompletableFuture<TbBlock>> futureList = new ArrayList<>();
+        blockNums.forEach(blockNumber -> {
+            CompletableFuture<TbBlock> future = CompletableFuture.supplyAsync(() -> {
                 TbBlock tbBlock = new TbBlock();
                 try {
                     BlockInfo blockInfo = channel.queryBlockByNumber(blockNumber);
-                    if (blockNumber != (blockchainInfo.getHeight() -1 )) {
+                    if (blockNumber != (blockchainInfo.getHeight() - 1)) {
                         BlockInfo nextBlockInfo = channel.queryBlockByNumber(blockNumber + 1);
                         tbBlock.setPkHash(Hex.encodeHexString(nextBlockInfo.getPreviousHash()));
                     } else {
@@ -410,17 +440,15 @@ public class FabricSDKWrapper {
                     log.error("query block by blockNumber failed, e:", e);
                     return null;
                 }
-                tbBlocks.add(tbBlock);
-                return tbBlocks;
+
+                return tbBlock;
             });
 
-            completableFutureArr[i] = future;
-        }
+            futureList.add(future);
+        });
 
-        CompletableFuture<Void> combindFuture = CompletableFuture.allOf(completableFutureArr);
-        combindFuture.get();
-
-        return tbBlocks;
+        return CompletableFuture.allOf(futureList.toArray(new CompletableFuture[0]))
+                .thenApply(v -> futureList.stream().map(CompletableFuture::join).collect(Collectors.toList())).get();
     }
 
     public static ListPage<TbNode> queryNodeList(FabricConfig fabricConfig,
@@ -432,14 +460,15 @@ public class FabricSDKWrapper {
         BlockInfo blockInfo = getBlockInfo(fabricConfig, channel, null);
 
         Collection<Peer> peers = channel.getPeers();
-        for (Peer peer : peers) {
+        peers.forEach(peer -> {
             TbNode tbNode = new TbNode();
             tbNode.setBlockNumber(BigInteger.valueOf(blockInfo.getBlockNumber()));
             tbNode.setNodeId(peer.getUrl());
             tbNode.setNodeActive(1);
             tbNode.setNodeType(WeEventConstants.NODE_TYPE_SEALER);
             tbNodes.add(tbNode);
-        }
+        });
+
         tbNodeListPage.setPageIndex(pageIndex);
         tbNodeListPage.setPageSize(pageSize);
         tbNodeListPage.setTotal(peers.size());
@@ -461,9 +490,9 @@ public class FabricSDKWrapper {
     public static List<Pair<String, String>> queryInstalledChaincodes(HFClient client, Peer peer) throws ProposalException, InvalidArgumentException {
         List<Query.ChaincodeInfo> listChainCodeInfo = client.queryInstalledChaincodes(peer);
         List<Pair<String, String>> chainCodeList = new ArrayList<>();
-        for (Query.ChaincodeInfo chaincodeInfo : listChainCodeInfo) {
-            chainCodeList.add(new Pair<>(chaincodeInfo.getName(), chaincodeInfo.getVersion()));
-        }
+        listChainCodeInfo.forEach(chaincodeInfo ->
+            chainCodeList.add(new Pair<>(chaincodeInfo.getName(), chaincodeInfo.getVersion()))
+        );
         return chainCodeList;
     }
 

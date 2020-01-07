@@ -132,6 +132,12 @@ class ResoruceService extends BaseModel {
   eventList (data) {
     return this.request(api.eventList, data)
   }
+  checkJDBC (data) {
+    return this.request(api.checkJDBC, data)
+  }
+  ruleStatic (data) {
+    return this.request(api.ruleStatic, data)
+  }
 }
 
 export default new ResoruceService()
